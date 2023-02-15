@@ -28,7 +28,6 @@ import pathlib
 import subprocess
 import tempfile
 
-
 if __name__ == "__main__":
     ##
     ## Setup Args
@@ -61,21 +60,16 @@ if __name__ == "__main__":
                 local_exec_root = event['workspaceInfo']['localExecRoot']
                 print('Execution Root:', local_exec_root)
 
-    compile_command_json_db_files = []
+    compile_command_json_db_files = set()
     for line in bazel_stderr:
         if line.endswith('.compile_commands.json'):
-            compile_command_json_db_files.append(line.strip())
+            compile_command_json_db_files.add(line.strip())
 
     ##
     ## Collect/Fix/Merge Compilation Databases
     ##
+
     print("Preparing compilation database...")
-
-    db_entries = []
-    for db in compile_command_json_db_files:
-            with open(db, 'r') as f:
-                db_entries.extend(json.load(f))
-
     def fix_db_entry(db_entry):
         if 'directory' in db_entry and db_entry['directory'] == '__EXEC_ROOT__':
             db_entry['directory'] = bazel_workspace if args.source_dir else local_exec_root
@@ -90,7 +84,11 @@ if __name__ == "__main__":
                 command = command.replace('-iquote', '-I')
                 db_entry['command'] = command
         return db_entry
-    db_entries = list(map(fix_db_entry, db_entries))
+
+    db_entries = []
+    for db in compile_command_json_db_files:
+            with open(db, 'r') as f:
+                db_entries.extend(list(map(fix_db_entry, json.load(f))))
 
     compdb_file = os.path.join(workspace_directory, "compile_commands.json")
 
